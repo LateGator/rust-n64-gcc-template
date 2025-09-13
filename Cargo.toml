@@ -1,0 +1,25 @@
+[package]
+name = "rust-n64-gcc-template"
+version = "0.1.0"
+edition = "2024"
+license = "Unlicense"
+
+[dependencies]
+arbitrary-int = "2.0.0"
+embedded-graphics = "0.8.1"
+n64-pac = "0.3"
+profont = "0.7.0"
+
+[profile.release]
+opt-level = "s"
+codegen-units = 1
+lto = "thin"
+
+[profile.dev]
+opt-level = 1
+lto = "off"
+
+[profile.dev-opt]
+inherits = "release"
+debug = 1
+strip = "none"

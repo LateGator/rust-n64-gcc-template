@@ -1,0 +1,3 @@
+/target
+/n64-toolchain
+/.cargo/*.json

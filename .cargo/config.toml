@@ -1,0 +1,9 @@
+[build]
+target = ".cargo/mips64vr-n64-elfeabi64.json"
+rustc-wrapper = "./wrapper.sh"
+
+[unstable]
+build-std = ["core", "alloc"]
+
+[target.'cfg(true)']
+runner = ["nust64", "--libdragon", "release", "--elf"]
