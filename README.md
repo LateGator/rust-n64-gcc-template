@@ -44,8 +44,9 @@ each supported MIPS ABI.
 - `mips64vr-n64-elfo64`
 - `mips64vr-n64-elfo32`
 
-A different ABI can be selected by editing `.cargo/config.toml`. To add/remove
-GCC arguments, edit the `llvm-args` field in the selected target JSON.
+A different ABI can be selected by editing `.cargo/config.toml`. Additional GCC
+arguments can be specified using the rustc `-Cllvm-args=...` switch specified
+in the target `rustflags` field at the bottom.
 
 ## Building
 

@@ -7,3 +7,4 @@ build-std = ["core", "alloc"]
 
 [target.'cfg(true)']
 runner = ["nust64", "--libdragon", "release", "--elf"]
+rustflags = ["-Cllvm-args=-mmax-float-constant-insns=3 -mfix4300 -falign-functions=32"]
