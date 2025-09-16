@@ -55,3 +55,22 @@ cargo r                         # Builds debug ROM
 cargo r --release               # Builds release ROM
 cargo r --profile dev-opt       # Builds optimized debug ROM
 ```
+
+## Details
+
+The toolchain consists of several modified components.
+
+- `binutils` - Patched to support the custom N64 target
+- `gcc` - Patched with additional MIPS features
+- `gccjit` - Patched to support position-dependent MIPS code
+- `newlib` - Not modified, used for `malloc` and `memcpy`/`memmove`/`memset`
+- `rustc_codegen_gcc` - Patched to better support custom GCC arguments
+
+The script can also be used to install
+[libdragon](https://github.com/DragonMinded/libdragon) and
+[tiny3d](https://github.com/HailToDodongo/tiny3d) for use with
+[libdragon2-rs](https://github.com/LateGator/libdragon2-rs).
+
+```sh
+./toolchain.sh install libdragon tiny32
+```

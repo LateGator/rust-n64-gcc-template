@@ -14,7 +14,7 @@ perror () { echo "$@" 1>&2; }
 mode_help () {
   "$1" "usage: $SCRIPT_NAME"$' COMMAND [TARGET ...]
 Supported commands:    fetch update configure make install clean help
-Supported targets:     all binutils gcc gccjit newlib rustc_codegen_gcc libdragon
+Supported targets:     all binutils gcc gccjit newlib rustc_codegen_gcc libdragon tiny3d
 
 Supported environment variables:
   N64_INST             installation prefix (required for configure)
@@ -25,7 +25,8 @@ Supported environment variables:
   BINUTILS_SOURCE_DIR  custom source directory for binutils
   NEWLIB_SOURCE_DIR    custom source directory for newlib
   MAKE_SOURCE_DIR      custom source directory for make
-  LIBDRAGON_SOURCE_DIR custom source directory for libdragon'
+  LIBDRAGON_SOURCE_DIR custom source directory for libdragon
+  TINY3D_SOURCE_DIR    custom source directory for tiny3d'
 }
 
 # Targets that will be matched when using the `all` target.
@@ -55,6 +56,7 @@ RCGCC_SOURCE_DIR=${RCGCC_SOURCE_DIR:-""}
 NEWLIB_SOURCE_DIR=${NEWLIB_SOURCE_DIR:-""}
 MAKE_SOURCE_DIR=${MAKE_SOURCE_DIR:-""}
 LIBDRAGON_SOURCE_DIR=${LIBDRAGON_SOURCE_DIR:-""}
+TINY3D_SOURCE_DIR=${TINY3D_SOURCE_DIR:-""}
 
 # Dependency source libs (Versions)
 NEWLIB_V=4.5.0.20241231
@@ -169,16 +171,19 @@ mode_fetch () {
     fi
     case $1 in
         binutils)
-            test -d binutils-gdb                || git clone https://github.com/lategator/binutils-gdb.git master
+            test -d binutils-gdb                || git clone https://github.com/lategator/binutils-gdb.git -b master
         ;;
         gcc | gccjit)
-            test -d gcc                         || git clone https://github.com/lategator/gcc.git master
+            test -d gcc                         || git clone https://github.com/lategator/gcc.git -b master
         ;;
         rustc_codegen_gcc)
-            test -d rustc_codegen_gcc           || git clone https://github.com/lategator/rustc_codegen_gcc.git master
+            test -d rustc_codegen_gcc           || git clone https://github.com/lategator/rustc_codegen_gcc.git -b master
         ;;
         libdragon)
-            test -d libdragon                   || git clone https://github.com/DragonMinded/libdragon.git preview
+            test -d libdragon                   || git clone https://github.com/DragonMinded/libdragon.git -b preview
+        ;;
+        tiny3d)
+            test -d tiny3d                      || git clone https://github.com/HailToDodongo/tiny3d.git -b main
         ;;
         newlib)
             test -f "newlib-$NEWLIB_V.tar.gz"   || download "https://sourceware.org/pub/newlib/newlib-$NEWLIB_V.tar.gz"
@@ -219,8 +224,7 @@ mode_fetch () {
 mode_update () {
     case $1 in
         binutils) mode_fetch $1 && (cd binutils-gdb && git pull);;
-        gcc | gccjit) mode_fetch $1 && (cd gcc && git pull);;
-        rustc_codegen_gcc) mode_fetch $1 && (cd rustc_codegen_gcc && git pull);;
+        gcc | gccjit | rustc_codegen_gcc | libdragon | tiny3d) mode_fetch $1 && (cd $1 && git pull);;
         *) perror "Unknown update target: $1"; return 1;;
     esac
 }
@@ -387,9 +391,7 @@ mode_configure () {
                 #--disable-threads
             popd
             ;;
-        libdragon)
-            mkdir -p libdragon-build
-            ;;
+        libdragon | tiny3d);;
         make)
             if [ -z "$MAKE_SOURCE_DIR" ]; then
                 mode_fetch make
@@ -415,7 +417,7 @@ mode_make () {
     local builddir
     local target
     local extra=
-    if [ "$1" = rustc_codegen_gcc ]; then
+    if [[ $1 == rustc_codegen_gcc ]]; then
         mode_configure $1
         local target buildpath=$(realpath "$BUILD_PATH")
         pushd "${RCGCC_SOURCE_DIR:-rustc_codegen_gcc}"
@@ -423,25 +425,31 @@ mode_make () {
         popd
     else
         case $1 in
-            binutils | gcc | gccjit | newlib | make | libdragon) builddir=$1-build;;
+            binutils | gcc | gccjit | newlib | make) builddir=$1-build;;
+            libdragon) target=(libdragon tools)
+                       builddir=${LIBDRAGON_SOURCE_DIR:-libdragon}
+                       extra=(N64_INST=$N64_INST N64_TARGET=mips64vr-n64-elf);;
+            tiny3d) target=(all)
+                    builddir=${TINY3D_SOURCE_DIR:-tiny3d}
+                    extra=(N64_INST=$N64_INST N64_TARGET=mips64vr-n64-elf);;
             *) perror "Unknown make target: $1"; return 1;;
         esac
         case $1 in
             gccjit) target=all-gcc; extra=TARGET-gcc=jit;;
-            libdragon) target=(libdragon tools)
-                       builddir=${LIBDRAGON_SOURCE_DIR:-libdragon}
-                       extra=(BUILD_DIR=$(realpath $1-build) N64_INST=$N64_INST N64_TARGET=mips64vr-n64-elf);;
             *) target=all;;
         esac
         if [ ! -e "$builddir/Makefile" ]; then
             mode_configure $1
         fi
         make -C "$builddir" -j "$JOBS" ${target[@]} ${extra[@]}
+        if [[ $1 == tiny3d ]]; then
+            make -C "$builddir/tools/gltf_importer" -j "$JOBS" N64_INST=$N64_INST
+        fi
     fi
 }
 
 mode_install () {
-    if [ "$1" = rustc_codegen_gcc ]; then
+    if [[ $1 == rustc_codegen_gcc ]]; then
         mode_make $1
         local target rcgcc_src=${RCGCC_SOURCE_DIR:-rustc_codegen_gcc}
         for abi in ${RUSTC_GCC_ABIS[@]}; do
@@ -459,11 +467,17 @@ mode_install () {
             newlib)                install_targets=install;;
             libdragon)             install_targets=(install tools-install)
                                    builddir=${LIBDRAGON_SOURCE_DIR:-libdragon}
-                                   extra=(BUILD_DIR=$(realpath $1-build) N64_INST=$N64_INST N64_TARGET=mips64vr-n64-elf);;
+                                   extra=(N64_INST=$N64_INST N64_TARGET=mips64vr-n64-elf);;
+            tiny3d)                install_targets=install
+                                   builddir=${TINY3D_SOURCE_DIR:-tiny3d}
+                                   extra=(N64_INST=$N64_INST N64_TARGET=mips64vr-n64-elf);;
             *) perror "Unknown install target: $1"; return 1;;
         esac
         mode_make $1
         exec_priv make -C "$builddir" ${install_targets[@]} ${extra[@]}
+        if [[ $1 == tiny3d ]]; then
+            exec_priv make -C "$builddir/tools/gltf_importer" N64_INST=$N64_INST install
+        fi
     fi
 }
 
@@ -474,7 +488,12 @@ check_noargs () {
 }
 
 mode_clean () {
-    rm -rf "$BUILD_PATH/gcc-build" "$BUILD_PATH/libdragon-build"
+    for p in binutils gcc gccjit newlib make libdragon tiny3d; do
+        echo rm -rf "$BUILD_PATH/$p-build"
+    done
+    for abi in ${RUSTC_GCC_ABIS[@]}; do
+        echo rm -f "$BUILD_PATH/mips64vr-n64-elf$abi.json"
+    done
 }
 
 for arg in $@; do
@@ -488,7 +507,7 @@ case $1 in
         cd "$BUILD_PATH"
         repeat_mode $@
     ;;
-    clean) shift; [ "$@" = all] || check_noargs $@; mode_clean;;
+    clean) shift; [[ $@ = all ]] || check_noargs $@; mode_clean;;
     help) shift; check_noargs $@; mode_help echo;;
     *) perror "Unknown command $1"; mode_help perror; exit 1;;
 esac
